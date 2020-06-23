@@ -1,6 +1,7 @@
 from sklearn.neighbors import radius_neighbors_graph
 import numpy as np
 
+
 class Particle:
 
     def __init__(self, xy, s, nearest_neighbors, z):
@@ -38,9 +39,9 @@ class Configuration:
             particles.append(Particle(xy=p[:2], s=s, nearest_neighbors=[], z=p[2]))
         self.particles = particles
 
-        cyc = lambda p1, p2: Configuration.cyclic_dist(boundaries, p1, p2)
+        cyc = lambda p1, p2: Configuration.cyclic_dist(boundaries[:2], p1, p2)
         self.graph = radius_neighbors_graph([p[:2] for p in self.positions], self.sig,
-                                            metric='pyfunc', func=cyc)
+                                            metric=cyc)
         for i in range(len(self.positions)):
             self.particles[i].nearest_neighbors = [self.particles[j] for j in self.graph.getrow(i).indices]
 
@@ -53,7 +54,7 @@ class Configuration:
     def cyclic_dist(boundaries, p1, p2):
         dx = np.array(p1) - p2  # direct vector
         dsq = 0
-        for i, b in len(p1):
+        for i in range(len(p1)):
             L = boundaries[i]
             dsq += min(dx[i] ** 2, (dx[i] + L) ** 2, (dx[i] - L) ** 2)  # find shorter path through B.D.
         return np.sqrt(dsq)
