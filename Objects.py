@@ -1,5 +1,6 @@
 from sklearn.neighbors import radius_neighbors_graph
 import numpy as np
+import random
 
 
 class Particle:
@@ -8,22 +9,17 @@ class Particle:
         self.xy, self.s, self.nearest_neighbors, self.z = \
             xy, s, nearest_neighbors, z
 
-    def e(self):
-        """
-        Calc and update self.energy
-        :return: -sum(si*sj) for j in neighbors(i)
-        """
-        energy = 0.0
-        for neighbor in self.nearest_neighbors:
-            energy -= self.s * neighbor.s
-        return energy
-
-    @property
     def de(self):
         """
         :return: e_new - e_old where s_new=-s_old.
         """
-        return -2 * self.e()
+        energy = 0.0
+        for neighbor in self.nearest_neighbors:
+            energy -= self.s * neighbor.s
+        return -2 * energy
+
+    def flip(self):
+        self.s = -self.s
 
 
 class Configuration:
@@ -47,8 +43,13 @@ class Configuration:
 
         E = 0
         for p in self.particles:
-            E += p.e()
+            for p_ in p.nearest_neighbors:
+                E -= self.J * p.s * p_.s / 2  # double counting bonds
         self.E = E
+
+        M = 0
+        for p in self.particles: M += p.s
+        self.M = M
 
     @staticmethod
     def cyclic_dist(boundaries, p1, p2):
@@ -59,4 +60,18 @@ class Configuration:
             dsq += min(dx[i] ** 2, (dx[i] + L) ** 2, (dx[i] - L) ** 2)  # find shorter path through B.D.
         return np.sqrt(dsq)
 
-    # def Metropolis_flip(self, i):
+    @property
+    def spins(self):
+        return [p.s for p in self.particles]
+
+    def Metropolis_flip(self):
+        p = self.particles[random.randint(0, len(self.particles) - 1)]
+        de = self.J * p.de()  # e_new-e_old
+        A = min(1, np.exp(-de))
+        u = random.random()
+        if u <= A: self.flip(p, de)
+
+    def flip(self, p, de):
+        self.E += de
+        self.M += -2 * p.s
+        p.flip()
