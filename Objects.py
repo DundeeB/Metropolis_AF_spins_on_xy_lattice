@@ -1,6 +1,7 @@
 from sklearn.neighbors import radius_neighbors_graph
 import numpy as np
 import random
+import os
 
 
 class Particle:
@@ -48,7 +49,9 @@ class Configuration:
         self.E = E
 
         M = 0
-        for p in self.particles: M += p.s
+        for p in self.particles:
+            H = boundaries[2]
+            M += p.s if p.z > H / 2 else -p.s
         self.M = M
 
     @staticmethod
@@ -69,9 +72,24 @@ class Configuration:
         de = self.J * p.de()  # e_new-e_old
         A = min(1, np.exp(-de))
         u = random.random()
-        if u <= A: self.flip(p, de)
+        if u <= A:
+            self.E += de
+            H = self.boundaries[2]
+            self.M += -2 * p.s if p.z > H / 2 else 2 * p.s
+            p.flip()
 
-    def flip(self, p, de):
-        self.E += de
-        self.M += -2 * p.s
-        p.flip()
+
+class FilesHandler:
+
+    def __init__(self, orig_dir, sp_name, output_dir):
+        self.output_dir = output_dir
+        self.positions = np.loadtxt(os.path.join(orig_dir, sp_name))
+        np.savetxt(os.path.join(output_dir, sp_name), self.positions)
+
+    def dump_spins(self, configuration, name):
+        np.savetxt(os.path.join(self.output_dir, name), configuration.spins)
+
+    def append_E_M(self, E, M, i0=0):
+        I = [i + i0 for i in range(len(E))]
+        with open(os.path.join(self.output_dir, 'M_E_output'), 'ab') as f:
+            np.savetxt(f, np.transpose([I, E, M]))
