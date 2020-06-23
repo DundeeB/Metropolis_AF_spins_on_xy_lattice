@@ -6,10 +6,10 @@ orid_dir = "../OOP_hard_sphere_event_chain"
 sp_name = "53647110"
 files_handler = FilesHandler(orid_dir, sp_name, 'debug')
 
-J = 0
+J = -1/2.269+0.05
 sig = 2
-iterations = int(1e4)
-save_once_in = int(1e3)
+iterations = int(4e5)
+save_once_in = int(4e4)
 
 state = Configuration(J, sig, files_handler.positions,
                       [max([p[i] for p in files_handler.positions]) + sig / 2 for i in [0, 1, 2]])
@@ -35,11 +35,12 @@ plt.plot(M)
 plt.xlabel("iteration number")
 plt.ylabel("Magnetization sum(s in A)-sum(s in B)")
 plt.grid()
-plt.ylim([0, max(M)])
+# plt.ylim([min(0, min(M) * 1.1), max(M) * 1.1])
 
 font = {'family': 'normal',
         'weight': 'bold',
         'size': 16}
 
 matplotlib.rc('font', **font)
-plt.show(block=True)
+plt.show()
+# plt.show(block=True)
