@@ -1,7 +1,8 @@
-from sklearn.neighbors import radius_neighbors_graph
+from sklearn.neighbors import radius_neighbors_graph, kneighbors_graph
 import numpy as np
 import random
 import os
+import scipy
 
 
 class Particle:
@@ -25,34 +26,50 @@ class Particle:
 
 class Configuration:
 
-    def __init__(self, J, sig, positions, boundaries):
-        self.J, self.sig, self.positions, self.boundaries = \
-            J, sig, positions, boundaries
+    def __init__(self, positions, boundaries, J=0, random_initialization=True, sig=None, k=None):
+        self.J, self.sig, self.positions, self.boundaries = J, sig, positions, boundaries
         self.N = len(positions)
 
         particles = []
         for p in positions:
-            s = 1 if p[2] > self.boundaries[2] / 2 else -1
+            if random_initialization:
+                s = 2 * random.randint(0, 1) - 1
+            else:
+                s = 1 if p[2] > self.boundaries[2] / 2 else -1
             particles.append(Particle(xy=p[:2], s=s, nearest_neighbors=[], z=p[2]))
         self.particles = particles
 
         cyc = lambda p1, p2: Configuration.cyclic_dist(boundaries[:2], p1, p2)
-        self.graph = radius_neighbors_graph([p[:2] for p in self.positions], self.sig,
-                                            metric=cyc)
+        if (k is None) and (sig is None):
+            raise ValueError("Must choose k or sig for graph construction")
+        if (k is not None) and (sig is not None):
+            raise ValueError("Must choose only one of  k and sig for graph construction")
+        if k is not None:
+            self.graph = kneighbors_graph([p[:2] for p in self.positions], n_neighbors=k, metric=cyc)
+            I, J, _ = scipy.sparse.find(self.graph)[:]
+            Ed = [(i, j) for (i, j) in zip(I, J)]
+            Eud = []
+            udgraph = scipy.sparse.csr_matrix((self.N, self.N))
+            for i, j in Ed:
+                if ((j, i) in Ed) and ((i, j) not in Eud) and ((j, i) not in Eud):
+                    Eud.append((i, j))
+                    udgraph[i, j] = 1
+                    udgraph[j, i] = 1
+            self.graph = udgraph
+        else:
+            self.graph = radius_neighbors_graph([p[:2] for p in self.positions], self.sig, metric=cyc)
         for i in range(len(self.positions)):
             self.particles[i].nearest_neighbors = [self.particles[j] for j in self.graph.getrow(i).indices]
 
-        E = 0
+        self.E = 0
         for p in self.particles:
             for p_ in p.nearest_neighbors:
-                E -= self.J * p.s * p_.s / 2  # double counting bonds
-        self.E = E
+                self.E -= self.J * p.s * p_.s / 2  # double counting bonds
 
-        M = 0
+        self.M = 0
         for p in self.particles:
             H = boundaries[2]
-            M += p.s if p.z > H / 2 else -p.s
-        self.M = M
+            self.M += p.s if p.z > H / 2 else -p.s
 
     @staticmethod
     def cyclic_dist(boundaries, p1, p2):
@@ -75,8 +92,21 @@ class Configuration:
         if u <= A:
             self.E += de
             H = self.boundaries[2]
-            self.M += -2 * p.s if p.z > H / 2 else 2 * p.s
+            self.M += 2 * p.s * (-1 if p.z > H / 2 else 1)
             p.flip()
+
+    def anneal(self, iterations, dTditer=0, save_diter=1):
+        M, E, J = [], [], []
+        T = 1/self.J
+        for i in range(iterations):
+            if i % save_diter == 0:
+                M.append(self.M)
+                E.append(self.E)
+                J.append(self.J)
+            self.Metropolis_flip()
+            T += dTditer
+            self.J = 1/T
+        return E, J, M
 
 
 class FilesHandler:
